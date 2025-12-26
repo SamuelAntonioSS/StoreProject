@@ -2,7 +2,7 @@ import { Router } from "express";
 import productController from "../controller/productController.js";
 import upload from "../middlewares/upload.js";
 
-const   router = Router();
+const router = Router();
 
 // GET productos
 router.get("/", productController.getProducts);
@@ -16,10 +16,10 @@ router.post("/", upload.single("image"), productController.createProduct);
 // PUT actualizar producto (con imagen)
 router.put("/:id", upload.single("image"), productController.updateProduct);
 
+// PATCH agregar stock - ⚠️ CORREGIDO
+router.patch("/:id/add-stock", productController.addStock);
+
 // DELETE
 router.delete("/:id", productController.deleteProduct);
-
-// En tu archivo de rutas de productos
-router.patch('/products/:id/add-stock', productController.addStock);
 
 export default router;

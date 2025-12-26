@@ -1,30 +1,26 @@
-// src/controllers/product.controller.js
 import Product from "../model/product.model.js";
 
 const productController = {
 
-  // Obtener todos los productos
   async getProducts(req, res) {
     try {
       const products = await Product.find();
       res.json(products);
     } catch (error) {
-      res.status(500).json({ message: "Error al obtener productos", error });
+      res.status(500).json({ message: "Error al obtener productos", error: error.message });
     }
   },
 
-  // Obtener producto por ID
   async getProductById(req, res) {
     try {
       const product = await Product.findById(req.params.id);
       if (!product) return res.status(404).json({ message: "Producto no encontrado" });
       res.json(product);
     } catch (error) {
-      res.status(500).json({ message: "Error al obtener producto", error });
+      res.status(500).json({ message: "Error al obtener producto", error: error.message });
     }
   },
 
-  // Crear producto
   async createProduct(req, res) {
     try {
       const { name, price, stock } = req.body;
@@ -37,7 +33,7 @@ const productController = {
       const newProduct = new Product({
         name,
         price,
-        stock,
+        stock: stock || 0,
         image
       });
 
@@ -45,15 +41,13 @@ const productController = {
       res.json(newProduct);
 
     } catch (error) {
-      res.status(500).json({ message: "Error al crear producto", error });
+      res.status(500).json({ message: "Error al crear producto", error: error.message });
     }
   },
 
-  // Actualizar producto
   async updateProduct(req, res) {
     try {
       const { name, price, stock } = req.body;
-
       let updateData = { name, price, stock };
 
       if (req.file) {
@@ -67,15 +61,14 @@ const productController = {
       );
 
       if (!updated) return res.status(404).json({ message: "Producto no encontrado" });
-
       res.json(updated);
 
     } catch (error) {
-      res.status(500).json({ message: "Error al actualizar producto", error });
+      res.status(500).json({ message: "Error al actualizar producto", error: error.message });
     }
   },
 
-  // ➕ Agregar stock (para cuando compres más producto)
+  // ⚠️ SOLO PARA PRODUCTOS NORMALES (NO GAS)
   async addStock(req, res) {
     try {
       const { cantidad } = req.body;
@@ -93,20 +86,17 @@ const productController = {
       res.json(product);
 
     } catch (error) {
-      res.status(500).json({ message: "Error al agregar stock", error });
+      res.status(500).json({ message: "Error al agregar stock", error: error.message });
     }
   },
 
-  // Eliminar producto
   async deleteProduct(req, res) {
     try {
       const deleted = await Product.findByIdAndDelete(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Producto no encontrado" });
-
       res.json({ message: "Producto eliminado" });
-
     } catch (error) {
-      res.status(500).json({ message: "Error al eliminar producto", error });
+      res.status(500).json({ message: "Error al eliminar producto", error: error.message });
     }
   }
 

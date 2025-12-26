@@ -1,10 +1,9 @@
-// src/controllers/resumen.controller.js
 import ResumenDia from "../model/resumen.model.js";
 import Product from "../model/product.model.js";
+import Config from "../model/config.model.js";
 
 const resumenController = {
 
-  // Obtener todos los resúmenes
   async getResumenes(req, res) {
     try {
       const resumenes = await ResumenDia.find()
@@ -16,7 +15,6 @@ const resumenController = {
     }
   },
 
-  // Obtener resumen por ID
   async getResumenById(req, res) {
     try {
       const resumen = await ResumenDia.findById(req.params.id)
@@ -28,31 +26,33 @@ const resumenController = {
     }
   },
 
-  // Crear resumen del día
   async createResumen(req, res) {
     try {
       const {
         fecha,
-        productos = [],           // [{ productoId, cantidad }]
+        productos = [],
         cantidadSubsidios = 0,
         valorSubsidio = 0,
         efectivoEntregado = 0,
         usuario
       } = req.body;
 
-      // Validar que haya productos o subsidios
       if (productos.length === 0 && cantidadSubsidios === 0) {
         return res.status(400).json({ 
           message: "Debe agregar al menos un producto o subsidio" 
         });
       }
 
-      // 📦 Procesar productos vendidos
+      // Obtener IDs de productos gas
+      const gasNormalId = await Config.findOne({ clave: 'productoGasNormalId' });
+      const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
+      const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
+
       const productosVendidos = [];
       let totalProductos = 0;
+      let totalTambosVendidos = 0;
 
       for (const item of productos) {
-        // Obtener producto
         const producto = await Product.findById(item.productoId);
         if (!producto) {
           return res.status(404).json({ 
@@ -60,18 +60,27 @@ const resumenController = {
           });
         }
 
-        // Verificar stock
-        if (producto.stock < item.cantidad) {
-          return res.status(400).json({ 
-            message: `Stock insuficiente para ${producto.name}. Disponible: ${producto.stock}` 
-          });
+        // Si es producto gas, NO verificar stock del producto
+        const esGas = idsGas.includes(producto._id.toString());
+
+        if (!esGas) {
+          // Productos normales: verificar stock individual
+          if (producto.stock < item.cantidad) {
+            return res.status(400).json({ 
+              message: `Stock insuficiente para ${producto.name}. Disponible: ${producto.stock}` 
+            });
+          }
+          // Descontar del producto
+          producto.stock -= item.cantidad;
+          await producto.save();
+        } else {
+          // Es gas: contar tambos a descontar
+          totalTambosVendidos += item.cantidad;
         }
 
-        // Calcular subtotal
         const subtotal = item.cantidad * producto.price;
         totalProductos += subtotal;
 
-        // Agregar a la lista
         productosVendidos.push({
           productoId: producto._id,
           nombre: producto.name,
@@ -79,20 +88,31 @@ const resumenController = {
           precioUnitario: producto.price,
           subtotal
         });
-
-        // 🔻 Descontar del stock
-        producto.stock -= item.cantidad;
-        await producto.save();
       }
 
-      // 💵 Calcular subsidios
-      const totalSubsidios = cantidadSubsidios * valorSubsidio;
+      // 🛢️ DESCONTAR TAMBOS DEL STOCK GLOBAL
+      if (totalTambosVendidos > 0) {
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        const stockActual = stockConfig ? stockConfig.valor : 0;
 
-      // 💰 Calcular totales
+        if (totalTambosVendidos > stockActual) {
+          return res.status(400).json({ 
+            message: `Stock insuficiente de tambos. Disponibles: ${stockActual}, necesitas: ${totalTambosVendidos}` 
+          });
+        }
+
+        const nuevoStock = stockActual - totalTambosVendidos;
+        await Config.findOneAndUpdate(
+          { clave: 'stockTambos' },
+          { valor: nuevoStock },
+          { upsert: true }
+        );
+      }
+
+      const totalSubsidios = cantidadSubsidios * valorSubsidio;
       const totalDelDia = totalProductos + totalSubsidios;
       const diferencia = totalDelDia - efectivoEntregado;
 
-      // Crear resumen
       const nuevoResumen = new ResumenDia({
         fecha,
         productos: productosVendidos,
@@ -107,8 +127,6 @@ const resumenController = {
       });
 
       await nuevoResumen.save();
-      
-      // Poblar los productos antes de devolver
       await nuevoResumen.populate('productos.productoId');
       
       res.json(nuevoResumen);
@@ -119,7 +137,6 @@ const resumenController = {
     }
   },
 
-  // Actualizar resumen
   async updateResumen(req, res) {
     try {
       const {
@@ -134,18 +151,42 @@ const resumenController = {
         return res.status(404).json({ message: "Resumen no encontrado" });
       }
 
-      // 🔄 Devolver stock de productos anteriores
+      // Obtener IDs de productos gas
+      const gasNormalId = await Config.findOne({ clave: 'productoGasNormalId' });
+      const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
+      const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
+
+      // 🔄 DEVOLVER STOCK (productos normales Y tambos)
+      let tambosADevolver = 0;
       for (const item of resumenActual.productos) {
-        const producto = await Product.findById(item.productoId);
-        if (producto) {
-          producto.stock += item.cantidad;
-          await producto.save();
+        const esGas = idsGas.includes(item.productoId.toString());
+        
+        if (!esGas) {
+          const producto = await Product.findById(item.productoId);
+          if (producto) {
+            producto.stock += item.cantidad;
+            await producto.save();
+          }
+        } else {
+          tambosADevolver += item.cantidad;
         }
       }
 
-      // 📦 Procesar nuevos productos
+      // Devolver tambos al stock global
+      if (tambosADevolver > 0) {
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        const stockActual = stockConfig ? stockConfig.valor : 0;
+        await Config.findOneAndUpdate(
+          { clave: 'stockTambos' },
+          { valor: stockActual + tambosADevolver },
+          { upsert: true }
+        );
+      }
+
+      // 📦 PROCESAR NUEVOS PRODUCTOS
       const productosVendidos = [];
       let totalProductos = 0;
+      let totalTambosVendidos = 0;
 
       if (productos && productos.length > 0) {
         for (const item of productos) {
@@ -156,10 +197,18 @@ const resumenController = {
             });
           }
 
-          if (producto.stock < item.cantidad) {
-            return res.status(400).json({ 
-              message: `Stock insuficiente para ${producto.name}` 
-            });
+          const esGas = idsGas.includes(producto._id.toString());
+
+          if (!esGas) {
+            if (producto.stock < item.cantidad) {
+              return res.status(400).json({ 
+                message: `Stock insuficiente para ${producto.name}` 
+              });
+            }
+            producto.stock -= item.cantidad;
+            await producto.save();
+          } else {
+            totalTambosVendidos += item.cantidad;
           }
 
           const subtotal = item.cantidad * producto.price;
@@ -172,18 +221,31 @@ const resumenController = {
             precioUnitario: producto.price,
             subtotal
           });
-
-          producto.stock -= item.cantidad;
-          await producto.save();
         }
       }
 
-      // 💵 Recalcular subsidios
+      // Descontar nuevos tambos
+      if (totalTambosVendidos > 0) {
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        const stockActual = stockConfig ? stockConfig.valor : 0;
+
+        if (totalTambosVendidos > stockActual) {
+          return res.status(400).json({ 
+            message: `Stock insuficiente de tambos. Disponibles: ${stockActual}` 
+          });
+        }
+
+        await Config.findOneAndUpdate(
+          { clave: 'stockTambos' },
+          { valor: stockActual - totalTambosVendidos },
+          { upsert: true }
+        );
+      }
+
       const totalSubsidios = (cantidadSubsidios || 0) * (valorSubsidio || 0);
       const totalDelDia = totalProductos + totalSubsidios;
       const diferencia = totalDelDia - (efectivoEntregado || 0);
 
-      // Actualizar resumen
       resumenActual.productos = productosVendidos;
       resumenActual.cantidadSubsidios = cantidadSubsidios || 0;
       resumenActual.valorSubsidio = valorSubsidio || 0;
@@ -204,7 +266,6 @@ const resumenController = {
     }
   },
 
-  // Eliminar resumen
   async deleteResumen(req, res) {
     try {
       const resumen = await ResumenDia.findById(req.params.id);
@@ -212,13 +273,34 @@ const resumenController = {
         return res.status(404).json({ message: "Resumen no encontrado" });
       }
 
-      // 🔄 Devolver stock de productos
+      const gasNormalId = await Config.findOne({ clave: 'productoGasNormalId' });
+      const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
+      const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
+
+      let tambosADevolver = 0;
+
       for (const item of resumen.productos) {
-        const producto = await Product.findById(item.productoId);
-        if (producto) {
-          producto.stock += item.cantidad;
-          await producto.save();
+        const esGas = idsGas.includes(item.productoId.toString());
+        
+        if (!esGas) {
+          const producto = await Product.findById(item.productoId);
+          if (producto) {
+            producto.stock += item.cantidad;
+            await producto.save();
+          }
+        } else {
+          tambosADevolver += item.cantidad;
         }
+      }
+
+      if (tambosADevolver > 0) {
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        const stockActual = stockConfig ? stockConfig.valor : 0;
+        await Config.findOneAndUpdate(
+          { clave: 'stockTambos' },
+          { valor: stockActual + tambosADevolver },
+          { upsert: true }
+        );
       }
 
       await ResumenDia.findByIdAndDelete(req.params.id);

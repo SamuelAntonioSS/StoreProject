@@ -5,6 +5,7 @@ import path from "path";
 // Importar rutas
 import productRoutes from "./src/routes/product.routes.js";
 import saleRoutes from "./src/routes/resumen.routes.js";
+import configRoutes from "./src/routes/config.routes.js";
 
 const app = express();
 
@@ -23,7 +24,8 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       products: "/api/products",
-      sales: "/api/sales"
+      sales: "/api/sales",
+      config: "/api/config"
     }
   });
 });
@@ -31,6 +33,7 @@ app.get("/", (req, res) => {
 // Rutas
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
+app.use("/api/config", configRoutes)
 
 // Manejo de rutas no encontradas
 app.use((req, res) => {
