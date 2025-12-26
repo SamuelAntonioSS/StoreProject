@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // Importar rutas
 import productRoutes from "./src/routes/product.routes.js";
@@ -9,13 +10,17 @@ import configRoutes from "./src/routes/config.routes.js";
 
 const app = express();
 
+// Necesario para usar __dirname con ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Hacer pública la carpeta de imágenes
-app.use("/uploads", express.static("uploads"));
+// 👉 Hacer pública la carpeta uploads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Ruta de bienvenida
 app.get("/", (req, res) => {
@@ -30,10 +35,10 @@ app.get("/", (req, res) => {
   });
 });
 
-// Rutas
+// Rutas de la API
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
-app.use("/api/config", configRoutes)
+app.use("/api/config", configRoutes);
 
 // Manejo de rutas no encontradas
 app.use((req, res) => {
