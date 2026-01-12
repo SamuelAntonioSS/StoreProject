@@ -11,7 +11,14 @@ const config = {
   adminPassword: process.env.ADMIN_PASSWORD || "adminPassword123",
   emailUser: process.env.EMAIL_USER || "antonysanz06@gmail.com",
   emailPass: process.env.EMAIL_PASS || "ogsd teib uzur ylcc",
-  nodeEnv: process.env.NODE_ENV || "development"
+  nodeEnv: process.env.NODE_ENV || "development",
+  
+  // Cloudinary
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET
+  }
 };
 
 export default config;

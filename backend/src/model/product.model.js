@@ -21,6 +21,10 @@ const productSchema = new mongoose.Schema({
   image: {
     type: String,
     default: null
+  },
+  imagePublicId: {  // 👈 AGREGAR ESTE CAMPO
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

@@ -1,7 +1,5 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 
 // Importar rutas
 import productRoutes from "./src/routes/product.routes.js";
@@ -10,17 +8,15 @@ import configRoutes from "./src/routes/config.routes.js";
 
 const app = express();
 
-// Necesario para usar __dirname con ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 👉 Hacer pública la carpeta uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ❌ YA NO NECESITAS estas líneas porque las imágenes están en Cloudinary
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Ruta de bienvenida
 app.get("/", (req, res) => {
