@@ -43,7 +43,6 @@ const resumenController = {
         });
       }
 
-      // Obtener IDs de productos gas
       const gasNormalId = await Config.findOne({ clave: 'productoGasNormalId' });
       const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
       const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
@@ -60,21 +59,17 @@ const resumenController = {
           });
         }
 
-        // Si es producto gas, NO verificar stock del producto
         const esGas = idsGas.includes(producto._id.toString());
 
         if (!esGas) {
-          // Productos normales: verificar stock individual
           if (producto.stock < item.cantidad) {
             return res.status(400).json({ 
               message: `Stock insuficiente para ${producto.name}. Disponible: ${producto.stock}` 
             });
           }
-          // Descontar del producto
           producto.stock -= item.cantidad;
           await producto.save();
         } else {
-          // Es gas: contar tambos a descontar
           totalTambosVendidos += item.cantidad;
         }
 
@@ -90,7 +85,6 @@ const resumenController = {
         });
       }
 
-      // 🛢️ DESCONTAR TAMBOS DEL STOCK GLOBAL
       if (totalTambosVendidos > 0) {
         const stockConfig = await Config.findOne({ clave: 'stockTambos' });
         const stockActual = stockConfig ? stockConfig.valor : 0;
@@ -140,6 +134,7 @@ const resumenController = {
   async updateResumen(req, res) {
     try {
       const {
+        fecha,              // ← AGREGADO: ahora se lee la fecha del body
         productos,
         cantidadSubsidios,
         valorSubsidio,
@@ -151,7 +146,6 @@ const resumenController = {
         return res.status(404).json({ message: "Resumen no encontrado" });
       }
 
-      // Obtener IDs de productos gas
       const gasNormalId = await Config.findOne({ clave: 'productoGasNormalId' });
       const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
       const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
@@ -172,7 +166,6 @@ const resumenController = {
         }
       }
 
-      // Devolver tambos al stock global
       if (tambosADevolver > 0) {
         const stockConfig = await Config.findOne({ clave: 'stockTambos' });
         const stockActual = stockConfig ? stockConfig.valor : 0;
@@ -224,7 +217,6 @@ const resumenController = {
         }
       }
 
-      // Descontar nuevos tambos
       if (totalTambosVendidos > 0) {
         const stockConfig = await Config.findOne({ clave: 'stockTambos' });
         const stockActual = stockConfig ? stockConfig.valor : 0;
@@ -246,6 +238,8 @@ const resumenController = {
       const totalDelDia = totalProductos + totalSubsidios;
       const diferencia = totalDelDia - (efectivoEntregado || 0);
 
+      // ← AGREGADO: ahora se actualiza la fecha
+      resumenActual.fecha = fecha || resumenActual.fecha;
       resumenActual.productos = productosVendidos;
       resumenActual.cantidadSubsidios = cantidadSubsidios || 0;
       resumenActual.valorSubsidio = valorSubsidio || 0;
