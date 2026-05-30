@@ -60,6 +60,7 @@ const resumenController = {
         }
 
         const esGas = idsGas.includes(producto._id.toString());
+        let stockAlCierre = null;
 
         if (!esGas) {
           if (producto.stock < item.cantidad) {
@@ -69,6 +70,7 @@ const resumenController = {
           }
           producto.stock -= item.cantidad;
           await producto.save();
+          stockAlCierre = producto.stock; // ← stock después de descontar
         } else {
           totalTambosVendidos += item.cantidad;
         }
@@ -81,10 +83,13 @@ const resumenController = {
           nombre: producto.name,
           cantidad: item.cantidad,
           precioUnitario: producto.price,
-          subtotal
+          subtotal,
+          stockAlCierre  // ← guardamos el stock al cierre
         });
       }
 
+      // Stock de tambos al cierre
+      let stockTambosAlCierre = null;
       if (totalTambosVendidos > 0) {
         const stockConfig = await Config.findOne({ clave: 'stockTambos' });
         const stockActual = stockConfig ? stockConfig.valor : 0;
@@ -101,6 +106,11 @@ const resumenController = {
           { valor: nuevoStock },
           { upsert: true }
         );
+        stockTambosAlCierre = nuevoStock; // ← stock de tambos al cierre
+      } else {
+        // Si no se vendieron tambos igual guardamos el stock actual de tambos
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        stockTambosAlCierre = stockConfig ? stockConfig.valor : 0;
       }
 
       const totalSubsidios = cantidadSubsidios * valorSubsidio;
@@ -117,7 +127,8 @@ const resumenController = {
         totalDelDia,
         efectivoEntregado,
         diferencia,
-        usuario
+        usuario,
+        stockTambosAlCierre
       });
 
       await nuevoResumen.save();
@@ -134,7 +145,7 @@ const resumenController = {
   async updateResumen(req, res) {
     try {
       const {
-        fecha,              // ← AGREGADO: ahora se lee la fecha del body
+        fecha,
         productos,
         cantidadSubsidios,
         valorSubsidio,
@@ -150,11 +161,10 @@ const resumenController = {
       const gasSubsidioId = await Config.findOne({ clave: 'productoGasSubsidioId' });
       const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
 
-      // 🔄 DEVOLVER STOCK (productos normales Y tambos)
+      // 🔄 DEVOLVER STOCK
       let tambosADevolver = 0;
       for (const item of resumenActual.productos) {
         const esGas = idsGas.includes(item.productoId.toString());
-        
         if (!esGas) {
           const producto = await Product.findById(item.productoId);
           if (producto) {
@@ -191,6 +201,7 @@ const resumenController = {
           }
 
           const esGas = idsGas.includes(producto._id.toString());
+          let stockAlCierre = null;
 
           if (!esGas) {
             if (producto.stock < item.cantidad) {
@@ -200,6 +211,7 @@ const resumenController = {
             }
             producto.stock -= item.cantidad;
             await producto.save();
+            stockAlCierre = producto.stock; // ← stock después de descontar
           } else {
             totalTambosVendidos += item.cantidad;
           }
@@ -212,11 +224,14 @@ const resumenController = {
             nombre: producto.name,
             cantidad: item.cantidad,
             precioUnitario: producto.price,
-            subtotal
+            subtotal,
+            stockAlCierre
           });
         }
       }
 
+      // Stock de tambos al cierre
+      let stockTambosAlCierre = null;
       if (totalTambosVendidos > 0) {
         const stockConfig = await Config.findOne({ clave: 'stockTambos' });
         const stockActual = stockConfig ? stockConfig.valor : 0;
@@ -227,18 +242,22 @@ const resumenController = {
           });
         }
 
+        const nuevoStock = stockActual - totalTambosVendidos;
         await Config.findOneAndUpdate(
           { clave: 'stockTambos' },
-          { valor: stockActual - totalTambosVendidos },
+          { valor: nuevoStock },
           { upsert: true }
         );
+        stockTambosAlCierre = nuevoStock;
+      } else {
+        const stockConfig = await Config.findOne({ clave: 'stockTambos' });
+        stockTambosAlCierre = stockConfig ? stockConfig.valor : 0;
       }
 
       const totalSubsidios = (cantidadSubsidios || 0) * (valorSubsidio || 0);
       const totalDelDia = totalProductos + totalSubsidios;
       const diferencia = totalDelDia - (efectivoEntregado || 0);
 
-      // ← AGREGADO: ahora se actualiza la fecha
       resumenActual.fecha = fecha || resumenActual.fecha;
       resumenActual.productos = productosVendidos;
       resumenActual.cantidadSubsidios = cantidadSubsidios || 0;
@@ -248,6 +267,7 @@ const resumenController = {
       resumenActual.totalDelDia = totalDelDia;
       resumenActual.efectivoEntregado = efectivoEntregado || 0;
       resumenActual.diferencia = diferencia;
+      resumenActual.stockTambosAlCierre = stockTambosAlCierre;
 
       await resumenActual.save();
       await resumenActual.populate('productos.productoId');
@@ -272,10 +292,8 @@ const resumenController = {
       const idsGas = [gasNormalId?.valor, gasSubsidioId?.valor].filter(Boolean);
 
       let tambosADevolver = 0;
-
       for (const item of resumen.productos) {
         const esGas = idsGas.includes(item.productoId.toString());
-        
         if (!esGas) {
           const producto = await Product.findById(item.productoId);
           if (producto) {

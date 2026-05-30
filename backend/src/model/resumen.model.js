@@ -1,4 +1,3 @@
-// src/models/resumen.model.js
 import mongoose from "mongoose";
 
 const resumenDiaSchema = new mongoose.Schema({
@@ -7,61 +6,43 @@ const resumenDiaSchema = new mongoose.Schema({
     required: true 
   },
   
-  // 📦 Productos vendidos (array)
   productos: [{
     productoId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
       required: true
     },
-    nombre: String,           // Guardamos el nombre para histórico
+    nombre: String,
     cantidad: {
       type: Number,
       required: true,
       min: 0
     },
-    precioUnitario: {        // Precio al momento de la venta
+    precioUnitario: {
       type: Number,
       required: true
     },
-    subtotal: Number         // cantidad × precioUnitario
+    subtotal: Number,
+    stockAlCierre: {         // ← NUEVO: stock que quedó después de esta venta
+      type: Number,
+      default: null
+    }
   }],
   
-  // 💵 Subsidios
-  cantidadSubsidios: {
+  // Stock de tambos al cierre del día
+  stockTambosAlCierre: {     // ← NUEVO
     type: Number,
-    default: 0,
-    min: 0
+    default: null
   },
-  valorSubsidio: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  totalSubsidios: {          // cantidadSubsidios × valorSubsidio
-    type: Number,
-    default: 0
-  },
-  
-  // 💰 Totales
-  totalProductos: {          // Suma de todos los subtotales
-    type: Number,
-    required: true
-  },
-  totalDelDia: {             // totalProductos + totalSubsidios
-    type: Number,
-    required: true
-  },
-  efectivoEntregado: { 
-    type: Number, 
-    default: 0 
-  },
-  diferencia: Number,        // totalDelDia - efectivoEntregado
-  
-  usuario: { 
-    type: String, 
-    required: true 
-  }
+
+  cantidadSubsidios: { type: Number, default: 0, min: 0 },
+  valorSubsidio: { type: Number, default: 0, min: 0 },
+  totalSubsidios: { type: Number, default: 0 },
+  totalProductos: { type: Number, required: true },
+  totalDelDia: { type: Number, required: true },
+  efectivoEntregado: { type: Number, default: 0 },
+  diferencia: Number,
+  usuario: { type: String, required: true }
 }, { 
   timestamps: true 
 });
